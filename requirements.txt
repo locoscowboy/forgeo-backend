@@ -1,0 +1,29 @@
+# FastAPI and ASGI server
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# Database
+sqlalchemy==2.0.27
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+# HubSpot API
+hubspot-api-client==8.2.3
+
+# CrewAI
+crewai==0.1.29
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+requests==2.31.0
+
+# Testing
+pytest==8.0.1
+httpx==0.26.0 
