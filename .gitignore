@@ -1,0 +1,29 @@
+# Environnement Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Fichiers de configuration sensibles
+.env
+*.pem
+*.key
+
+# Logs et base de données
+*.log
+*.sqlite3
+
+# Fichiers systèmes
+.DS_Store
+Thumbs.db
+
+# Dossiers spécifiques
+certbot/
+
+# Fichiers temporaires
+*.tmp
+*.bak
