@@ -18,3 +18,4 @@ class User(Base):
     
     # Relations
     audits = relationship("Audit", back_populates="user")
+    hubspot_tokens = relationship("HubspotToken", back_populates="user")

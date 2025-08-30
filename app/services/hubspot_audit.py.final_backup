@@ -27,14 +27,6 @@ class HubspotAuditService:
                 "description": "Contacts sans adresse email",
                 "field": "email"
             },
-            "invalid_email": {
-                "description": "Contacts avec email invalide",
-                "field": "email"
-            },
-            "duplicate_email": {
-                "description": "Contacts avec email en double",
-                "field": "email"
-            },
             "missing_firstname": {
                 "description": "Contacts sans prénom",
                 "field": "firstname"
@@ -58,29 +50,13 @@ class HubspotAuditService:
                 "description": "Entreprises sans industrie",
                 "field": "industry"
             },
-            "missing_domain": {
-                "description": "Entreprises sans domaines",
-                "field": "domain"
-            },
-            "duplicate_domain": {
-                "description": "Entreprises avec domaine en double",
-                "field": "domain"
-            },
             "missing_owner": {
                 "description": "Entreprises sans propriétaire",
                 "field": "hubspot_owner_id"
-            },
-            "inactive_30days": {
-                "description": "Entreprises inactives (30 jours)",
-                "field": "hs_lastmodifieddate"
             }
         }
         
         self.deal_criteria = {
-            "missing_name": {                    # ← Remplace "empty_name"
-                "description": "Affaires sans nom",
-                "field": "dealname"
-            },
             "missing_amount": {
                 "description": "Deals sans montant",
                 "field": "amount"
@@ -88,10 +64,6 @@ class HubspotAuditService:
             "missing_stage": {
                 "description": "Deals sans stage",
                 "field": "dealstage"
-            },
-            "stalled": {                         # ← À ajouter
-                "description": "Affaires stagnantes",
-                "field": "hs_lastmodifieddate"
             }
         }
     
@@ -159,16 +131,12 @@ class HubspotAuditService:
                     total_count=num_contacts
                 )
                 self.db.add(result)
-                self.db.flush()
 
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="contact",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -184,16 +152,12 @@ class HubspotAuditService:
                     total_count=num_companies
                 )
                 self.db.add(result)
-                self.db.flush()
 
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="company",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -209,16 +173,12 @@ class HubspotAuditService:
                     total_count=num_deals
                 )
                 self.db.add(result)
-                self.db.flush()
 
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="deal",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -254,7 +214,7 @@ class HubspotAuditService:
             Un tuple contenant le nombre de contacts et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_email": [],
+            "empty_email": [],
             "invalid_email": [],
             "duplicate_email": [],
             "missing_firstname": [],
@@ -300,7 +260,7 @@ class HubspotAuditService:
             if last_modified:
                 try:
                     last_modified_date = datetime.fromtimestamp(int(last_modified) / 1000)
-                    if (datetime.utcnow() - last_modified_date) > timedelta(days=30):
+                    if (datetime.utcnow() - last_modified_date) > timedelta(days=180):
                         issues["inactive_30days"].append(contact)
                 except (ValueError, TypeError):
                     pass
@@ -325,16 +285,15 @@ class HubspotAuditService:
             Un tuple contenant le nombre d'entreprises et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_name": [],
-            "missing_domain": [],
+            "empty_name": [],
+            "empty_domain": [],
             "duplicate_domain": [],
             "missing_industry": [],
-            "missing_owner": [],
             "inactive_30days": []
         }
         
         # Récupérer les entreprises (via API ou localement)
-        properties = ["name", "domain", "industry", "hubspot_owner_id", "hs_lastmodifieddate"]
+        properties = ["name", "domain", "hs_lastmodifieddate"]
         
         if sync_id:
             companies = await self._fetch_local_objects("companies", sync_id)
@@ -354,22 +313,12 @@ class HubspotAuditService:
             # Vérifier le nom
             name = properties.get("name")
             if not name:
-                issues["missing_name"].append(company)
-           
-            # Vérifier l'industrie
-            industry = properties.get("industry")
-            if not industry:
-                issues["missing_industry"].append(company) 
-
-            # Vérifier le propriétaire
-            owner = properties.get("hubspot_owner_id")
-            if not owner:
-                issues["missing_owner"].append(company)
-
+                issues["empty_name"].append(company)
+            
             # Vérifier le domaine
             domain = properties.get("domain")
             if not domain:
-                issues["missing_domain"].append(company)
+                issues["empty_domain"].append(company)
             else:
                 # Compter les occurrences pour trouver les doublons
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
@@ -404,8 +353,8 @@ class HubspotAuditService:
             Un tuple contenant le nombre d'affaires et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_name": [],
-            "missing_amount": [],
+            "empty_name": [],
+            "undefined_amount": [],
             "stalled": [],
             "missing_stage": []
         }
@@ -428,18 +377,13 @@ class HubspotAuditService:
             # Vérifier le nom
             dealname = properties.get("dealname")
             if not dealname:
-                issues["missing_name"].append(deal)
+                issues["empty_name"].append(deal)
             
             # Vérifier le montant
             amount = properties.get("amount")
             if not amount:
-                issues["missing_amount"].append(deal)
+                issues["undefined_amount"].append(deal)
             
-            # Vérifier le stage
-            dealstage = properties.get("dealstage")
-            if not dealstage:
-                issues["missing_stage"].append(deal)
-
             # Vérifier si l'affaire est stagnante
             last_modified = properties.get("hs_lastmodifieddate")
             if last_modified:

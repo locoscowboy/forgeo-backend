@@ -1,6 +1,6 @@
 from typing import Any
 import requests
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -15,8 +15,7 @@ router = APIRouter()
 
 @router.get("/auth", response_model=HubspotAuthResponse)
 def hubspot_auth(
-    # current_user: User = Depends(get_current_active_user),
-    user_id: int = 6,  # ID administrateur pour MVP
+    current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
     Get HubSpot authentication URL
@@ -26,32 +25,50 @@ def hubspot_auth(
             status_code=500,
             detail="HubSpot integration not configured"
         )
-    
+
     auth_url = (
         f"https://app.hubspot.com/oauth/authorize"
         f"?client_id={settings.HUBSPOT_CLIENT_ID}"
         f"&redirect_uri={settings.HUBSPOT_REDIRECT_URI}"
         f"&scope=crm.objects.contacts.read%20crm.objects.contacts.write%20crm.objects.companies.read%20crm.objects.companies.write%20crm.objects.deals.read%20crm.objects.deals.write%20crm.schemas.contacts.read%20crm.schemas.companies.read%20crm.schemas.deals.read%20crm.objects.owners.read%20oauth"
+        f"&state={current_user.id}"
     )
-    
+
     return {"auth_url": auth_url}
 
 @router.get("/callback")
 def hubspot_callback(
     code: str,
+    state: str,
     db: Session = Depends(get_db),
-    # current_user: User = Depends(get_current_active_user),
-    user_id: int = 6,  # ID administrateur pour MVP
 ) -> Any:
     """
     HubSpot OAuth callback
     """
+    # Valider et récupérer l'user_id depuis le parameter state
+    try:
+        user_id = int(state)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid state parameter"
+        )
+    
+    # Vérifier que l'utilisateur existe
+    from app import crud
+    user = crud.user.get(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
     if not settings.HUBSPOT_CLIENT_ID or not settings.HUBSPOT_CLIENT_SECRET or not settings.HUBSPOT_REDIRECT_URI:
         raise HTTPException(
             status_code=500,
             detail="HubSpot integration not configured"
         )
-    
+
     # Exchange code for token
     token_url = "https://api.hubapi.com/oauth/v1/token"
     data = {
@@ -61,45 +78,65 @@ def hubspot_callback(
         "redirect_uri": settings.HUBSPOT_REDIRECT_URI,
         "code": code
     }
-    
+
     response = requests.post(token_url, data=data)
     if response.status_code != 200:
         raise HTTPException(
             status_code=400,
             detail=f"Failed to get token: {response.text}"
         )
-    
+
     token_data = response.json()
     expires_in = token_data.get("expires_in", 21600)  # Default 6 hours
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-    
+
     token_obj = HubspotTokenCreate(
         access_token=token_data["access_token"],
         refresh_token=token_data["refresh_token"],
         expires_at=expires_at,
         is_active=True
     )
-    
+
     crud_hubspot.create_token(db, token_obj, user_id)
-    
-    return RedirectResponse(url="https://app.forgeo.io/audits?connected=true")
+
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HubSpot Connection Success</title>
+</head>
+<body>
+    <script>
+        try {
+            window.opener.postMessage({
+                type: 'hubspot-auth-success'
+            }, window.location.origin);
+            window.close();
+        } catch (error) {
+            console.error('Error sending message to parent:', error);
+            window.location.href = 'https://app.forgeo.io/audits?connected=true';
+        }
+    </script>
+    <p>Connexion réussie ! Cette fenêtre va se fermer automatiquement...</p>
+</body>
+</html>
+""")
 
 @router.get("/token", response_model=HubspotToken)
 def get_hubspot_token(
     db: Session = Depends(get_db),
-    # current_user: User = Depends(get_current_active_user),
-    user_id: int = 6,  # ID administrateur pour MVP
+    current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
     Get current HubSpot token
     """
-    token = crud_hubspot.get_active_token(db, user_id)
+    token = crud_hubspot.get_active_token(db, current_user.id)
     if not token:
         raise HTTPException(
             status_code=404,
             detail="No active HubSpot integration found"
         )
-    
+
     # Check if token is valid
     if not crud_hubspot.is_token_valid(token):
         # Try to refresh
@@ -108,7 +145,7 @@ def get_hubspot_token(
                 status_code=500,
                 detail="HubSpot integration not configured"
             )
-        
+
         refresh_url = "https://api.hubapi.com/oauth/v1/token"
         data = {
             "grant_type": "refresh_token",
@@ -116,39 +153,38 @@ def get_hubspot_token(
             "client_secret": settings.HUBSPOT_CLIENT_SECRET,
             "refresh_token": token.refresh_token
         }
-        
+
         response = requests.post(refresh_url, data=data)
         if response.status_code != 200:
             # Deactivate token as it can't be refreshed
-            crud_hubspot.deactivate_token(db, user_id)
+            crud_hubspot.deactivate_token(db, current_user.id)
             raise HTTPException(
                 status_code=401,
                 detail="HubSpot token expired and could not be refreshed"
             )
-        
+
         token_data = response.json()
         expires_in = token_data.get("expires_in", 21600)  # Default 6 hours
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-        
+
         token_update = HubspotTokenCreate(
             access_token=token_data["access_token"],
             refresh_token=token_data["refresh_token"],
             expires_at=expires_at,
             is_active=True
         )
-        
-        token = crud_hubspot.create_token(db, token_update, user_id)
-    
+
+        token = crud_hubspot.create_token(db, token_update, current_user.id)
+
     return token
 
 @router.delete("/disconnect")
 def disconnect_hubspot(
     db: Session = Depends(get_db),
-    # current_user: User = Depends(get_current_active_user),
-    user_id: int = 6,  # ID administrateur pour MVP
+    current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
     Disconnect HubSpot integration
     """
-    crud_hubspot.deactivate_token(db, user_id)
+    crud_hubspot.deactivate_token(db, current_user.id)
     return {"message": "HubSpot disconnected successfully"}

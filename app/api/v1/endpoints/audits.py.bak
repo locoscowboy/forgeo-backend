@@ -139,7 +139,7 @@ async def get_audit_results(
     
     # Filtrer par type d'objet si spécifié
     if object_type:
-        query = query.filter(AuditResult.category == object_type)
+        query = query.filter(AuditResult.object_type == object_type)
     
     results = query.all()
     
@@ -177,7 +177,7 @@ async def get_audit_result_details(
     
     # Récupérer les détails
     details = db.query(AuditDetailItem).filter(
-        AuditDetailItem.result_id == result_id
+        AuditDetailItem.audit_result_id == result_id
     ).offset(skip).limit(limit).all()
     
     return details

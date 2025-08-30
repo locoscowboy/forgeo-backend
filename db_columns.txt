@@ -1,0 +1,12 @@
+ column_name 
+-------------
+ id
+ audit_id
+ empty_count
+ total_count
+ percentage
+ category
+ criterion
+ field_name
+(8 rows)
+

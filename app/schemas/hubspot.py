@@ -23,7 +23,7 @@ class HubspotTokenInDBBase(HubspotTokenBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class HubspotToken(HubspotTokenInDBBase):
     pass

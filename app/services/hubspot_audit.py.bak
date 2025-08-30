@@ -23,76 +23,24 @@ class HubspotAuditService:
         
         # Définir les critères d'audit pour chaque objet
         self.contact_criteria = {
-            "missing_email": {
-                "description": "Contacts sans adresse email",
-                "field": "email"
-            },
-            "invalid_email": {
-                "description": "Contacts avec email invalide",
-                "field": "email"
-            },
-            "duplicate_email": {
-                "description": "Contacts avec email en double",
-                "field": "email"
-            },
-            "missing_firstname": {
-                "description": "Contacts sans prénom",
-                "field": "firstname"
-            },
-            "missing_lastname": {
-                "description": "Contacts sans nom",
-                "field": "lastname"
-            },
-            "inactive_30days": {
-                "description": "Contacts inactifs (30 jours)",
-                "field": "hs_lastmodifieddate"
-            }
+            "empty_email": "Contacts sans adresse email",
+            "invalid_email": "Contacts avec une adresse email non valide",
+            "missing_lastname": "Contacts sans nom de famille",
+            "duplicate_email": "Contacts avec des adresses email en double",
+            "inactive": "Contacts inactifs depuis plus de 6 mois"
         }
         
         self.company_criteria = {
-            "missing_name": {
-                "description": "Entreprises sans nom",
-                "field": "name"
-            },
-            "missing_industry": {
-                "description": "Entreprises sans industrie",
-                "field": "industry"
-            },
-            "missing_domain": {
-                "description": "Entreprises sans domaines",
-                "field": "domain"
-            },
-            "duplicate_domain": {
-                "description": "Entreprises avec domaine en double",
-                "field": "domain"
-            },
-            "missing_owner": {
-                "description": "Entreprises sans propriétaire",
-                "field": "hubspot_owner_id"
-            },
-            "inactive_30days": {
-                "description": "Entreprises inactives (30 jours)",
-                "field": "hs_lastmodifieddate"
-            }
+            "empty_name": "Entreprises sans nom",
+            "empty_domain": "Entreprises sans domaine",
+            "duplicate_domain": "Entreprises avec des domaines en double",
+            "inactive": "Entreprises inactives depuis plus de 6 mois"
         }
         
         self.deal_criteria = {
-            "missing_name": {                    # ← Remplace "empty_name"
-                "description": "Affaires sans nom",
-                "field": "dealname"
-            },
-            "missing_amount": {
-                "description": "Deals sans montant",
-                "field": "amount"
-            },
-            "missing_stage": {
-                "description": "Deals sans stage",
-                "field": "dealstage"
-            },
-            "stalled": {                         # ← À ajouter
-                "description": "Affaires stagnantes",
-                "field": "hs_lastmodifieddate"
-            }
+            "empty_name": "Affaires sans nom",
+            "undefined_amount": "Affaires sans montant défini",
+            "stalled": "Affaires stagnantes depuis plus de 3 mois"
         }
     
     async def run_audit(self, audit_id: int, sync_id: Optional[int] = None) -> Audit:
@@ -152,23 +100,18 @@ class HubspotAuditService:
             for criteria, issues in contact_issues.items():
                 result = AuditResult(
                     audit_id=audit_id,
-                    category="contact",
-                    criterion=criteria,
-                    field_name=self.contact_criteria[criteria]["field"],
-                    empty_count=len(issues),
-                    total_count=num_contacts
+                    object_type="contact",
+                    criteria=criteria,
+                    criteria_name=self.contact_criteria.get(criteria, criteria),
+                    count=len(issues)
                 )
                 self.db.add(result)
-                self.db.flush()
-
+                
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="contact",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -177,23 +120,18 @@ class HubspotAuditService:
             for criteria, issues in company_issues.items():
                 result = AuditResult(
                     audit_id=audit_id,
-                    category="company",
-                    criterion=criteria,
-                    field_name=self.company_criteria[criteria]["field"],
-                    empty_count=len(issues),
-                    total_count=num_companies
+                    object_type="company",
+                    criteria=criteria,
+                    criteria_name=self.company_criteria.get(criteria, criteria),
+                    count=len(issues)
                 )
                 self.db.add(result)
-                self.db.flush()
-
+                
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="company",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -202,23 +140,18 @@ class HubspotAuditService:
             for criteria, issues in deal_issues.items():
                 result = AuditResult(
                     audit_id=audit_id,
-                    category="deal",
-                    criterion=criteria,
-                    field_name=self.deal_criteria[criteria]["field"],
-                    empty_count=len(issues),
-                    total_count=num_deals
+                    object_type="deal",
+                    criteria=criteria,
+                    criteria_name=self.deal_criteria.get(criteria, criteria),
+                    count=len(issues)
                 )
                 self.db.add(result)
-                self.db.flush()
-
+                
                 # Ajouter les détails
                 for issue in issues:
                     detail = AuditDetailItem(
-                        audit_id=audit_id,
-                        result_id=result.id,
-                        category="deal",
-                        criterion=criteria,
-                        hubspot_id=issue.get("id", ""),
+                        audit_result=result,
+                        object_id=issue.get("id", ""),
                         object_data=issue
                     )
                     self.db.add(detail)
@@ -227,9 +160,9 @@ class HubspotAuditService:
             audit.status = "completed"
             audit.completed_at = datetime.utcnow()
             audit.quality_score = quality_score
-            audit.contacts_total = num_contacts
-            audit.companies_total = num_companies
-            audit.deals_total = num_deals
+            audit.total_contacts = num_contacts
+            audit.total_companies = num_companies
+            audit.total_deals = num_deals
             audit.total_issues = total_issues
             
             self.db.commit()
@@ -238,7 +171,7 @@ class HubspotAuditService:
             return audit
             
         except Exception as e:
-            logger.error(f"Error during audit (line $LINENO): {e}")
+            logger.error(f"Error during audit: {e}")
             audit.status = "failed"
             audit.completed_at = datetime.utcnow()
             self.db.commit()
@@ -254,12 +187,11 @@ class HubspotAuditService:
             Un tuple contenant le nombre de contacts et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_email": [],
+            "empty_email": [],
             "invalid_email": [],
-            "duplicate_email": [],
-            "missing_firstname": [],
             "missing_lastname": [],
-            "inactive_30days": []
+            "duplicate_email": [],
+            "inactive": []
         }
         
         # Récupérer les contacts (via API ou localement)
@@ -283,7 +215,7 @@ class HubspotAuditService:
             # Vérifier l'email
             email = properties.get("email")
             if not email:
-                issues["missing_email"].append(contact)
+                issues["empty_email"].append(contact)
             elif not self._is_valid_email(email):
                 issues["invalid_email"].append(contact)
             else:
@@ -300,8 +232,8 @@ class HubspotAuditService:
             if last_modified:
                 try:
                     last_modified_date = datetime.fromtimestamp(int(last_modified) / 1000)
-                    if (datetime.utcnow() - last_modified_date) > timedelta(days=30):
-                        issues["inactive_30days"].append(contact)
+                    if (datetime.utcnow() - last_modified_date) > timedelta(days=180):
+                        issues["inactive"].append(contact)
                 except (ValueError, TypeError):
                     pass
         
@@ -325,16 +257,14 @@ class HubspotAuditService:
             Un tuple contenant le nombre d'entreprises et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_name": [],
-            "missing_domain": [],
+            "empty_name": [],
+            "empty_domain": [],
             "duplicate_domain": [],
-            "missing_industry": [],
-            "missing_owner": [],
-            "inactive_30days": []
+            "inactive": []
         }
         
         # Récupérer les entreprises (via API ou localement)
-        properties = ["name", "domain", "industry", "hubspot_owner_id", "hs_lastmodifieddate"]
+        properties = ["name", "domain", "hs_lastmodifieddate"]
         
         if sync_id:
             companies = await self._fetch_local_objects("companies", sync_id)
@@ -354,22 +284,12 @@ class HubspotAuditService:
             # Vérifier le nom
             name = properties.get("name")
             if not name:
-                issues["missing_name"].append(company)
-           
-            # Vérifier l'industrie
-            industry = properties.get("industry")
-            if not industry:
-                issues["missing_industry"].append(company) 
-
-            # Vérifier le propriétaire
-            owner = properties.get("hubspot_owner_id")
-            if not owner:
-                issues["missing_owner"].append(company)
-
+                issues["empty_name"].append(company)
+            
             # Vérifier le domaine
             domain = properties.get("domain")
             if not domain:
-                issues["missing_domain"].append(company)
+                issues["empty_domain"].append(company)
             else:
                 # Compter les occurrences pour trouver les doublons
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
@@ -380,7 +300,7 @@ class HubspotAuditService:
                 try:
                     last_modified_date = datetime.fromtimestamp(int(last_modified) / 1000)
                     if (datetime.utcnow() - last_modified_date) > timedelta(days=180):
-                        issues["inactive_30days"].append(company)
+                        issues["inactive"].append(company)
                 except (ValueError, TypeError):
                     pass
         
@@ -404,10 +324,9 @@ class HubspotAuditService:
             Un tuple contenant le nombre d'affaires et un dictionnaire des problèmes trouvés
         """
         issues = {
-            "missing_name": [],
-            "missing_amount": [],
-            "stalled": [],
-            "missing_stage": []
+            "empty_name": [],
+            "undefined_amount": [],
+            "stalled": []
         }
         
         # Récupérer les affaires (via API ou localement)
@@ -428,18 +347,13 @@ class HubspotAuditService:
             # Vérifier le nom
             dealname = properties.get("dealname")
             if not dealname:
-                issues["missing_name"].append(deal)
+                issues["empty_name"].append(deal)
             
             # Vérifier le montant
             amount = properties.get("amount")
             if not amount:
-                issues["missing_amount"].append(deal)
+                issues["undefined_amount"].append(deal)
             
-            # Vérifier le stage
-            dealstage = properties.get("dealstage")
-            if not dealstage:
-                issues["missing_stage"].append(deal)
-
             # Vérifier si l'affaire est stagnante
             last_modified = properties.get("hs_lastmodifieddate")
             if last_modified:

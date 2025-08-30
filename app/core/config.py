@@ -48,4 +48,9 @@ class Settings(BaseSettings):
     HUBSPOT_CLIENT_SECRET: Optional[str] = os.getenv("HUBSPOT_CLIENT_SECRET")
     HUBSPOT_REDIRECT_URI: Optional[str] = os.getenv("HUBSPOT_REDIRECT_URI")
 
+    # HubSpot Auto-Sync Settings
+    HUBSPOT_AUTO_SYNC_ENABLED: bool = os.getenv("HUBSPOT_AUTO_SYNC_ENABLED", "true").lower() == "true"
+    HUBSPOT_SYNC_INTERVAL_HOURS: int = int(os.getenv("HUBSPOT_SYNC_INTERVAL_HOURS", "6"))
+    HUBSPOT_SYNC_STARTUP_DELAY_MINUTES: int = int(os.getenv("HUBSPOT_SYNC_STARTUP_DELAY_MINUTES", "2"))
+
 settings = Settings()
