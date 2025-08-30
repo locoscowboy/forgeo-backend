@@ -53,4 +53,9 @@ class Settings(BaseSettings):
     HUBSPOT_SYNC_INTERVAL_HOURS: int = int(os.getenv("HUBSPOT_SYNC_INTERVAL_HOURS", "6"))
     HUBSPOT_SYNC_STARTUP_DELAY_MINUTES: int = int(os.getenv("HUBSPOT_SYNC_STARTUP_DELAY_MINUTES", "2"))
 
+    # Google OAuth Settings
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None
+
 settings = Settings()
