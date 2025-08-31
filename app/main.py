@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.db_init import init_db
-from app.services.hubspot_auto_sync import auto_sync_service
+# from app.services.hubspot_auto_sync import auto_sync_service   # DÉSACTIVÉ SMART SYNC
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -15,8 +15,8 @@ async def lifespan(app: FastAPI):
     # Startup
     try:
         print("�� Démarrage de l'application...")
-        await auto_sync_service.start_scheduler()
-        print("✅ Auto-sync scheduler démarré avec succès")
+        # await auto_sync_service.start_scheduler()   # DÉSACTIVÉ SMART SYNC
+        print("✅ Application démarrée (Smart Sync Mode)")
     except Exception as e:
         print(f"❌ Erreur dans lifespan startup: {e}")
         import traceback
@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     try:
-        await auto_sync_service.stop_scheduler()
+        # await auto_sync_service.stop_scheduler() # DÉSACTIVÉ SMART SYNC
         print("🛑 Auto-sync scheduler arrêté")
     except Exception as e:
         print(f"❌ Erreur dans lifespan shutdown: {e}")

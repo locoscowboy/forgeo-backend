@@ -19,3 +19,21 @@ class HubspotSyncResponse(HubspotSyncBase):
     
     class Config:
        from_attributes = True
+
+# === NOUVEAUX SCHÉMAS SMART SYNC ===
+class SyncStatusResponse(BaseModel):
+    """Réponse enrichie pour le statut de synchronisation"""
+    needs_sync: bool
+    reason: str
+    last_sync: Optional[HubspotSyncResponse] = None
+    data_freshness: str  # "fresh", "stale", "very_stale", "never"
+    hours_since_sync: Optional[float] = None
+    recommendation: str
+
+class ShouldSyncResponse(BaseModel):
+    """Réponse pour l'endpoint should-sync"""
+    should_sync: bool
+    reason: str
+    last_sync_ago_hours: Optional[float] = None
+    data_quality: str  # "fresh", "acceptable", "stale"
+    auto_sync_recommended: bool

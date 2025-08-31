@@ -13,6 +13,22 @@ from app.services.hubspot_audit import HubspotAuditService  # Pour réutiliser _
 
 logger = logging.getLogger(__name__)
 
+def sync_to_dict(sync: Optional[HubspotDataSync]) -> Optional[dict]:
+    """Convertit un objet HubspotDataSync en dictionnaire sérialisable"""
+    if not sync:
+        return None
+    
+    return {
+        "id": sync.id,
+        "user_id": sync.user_id,
+        "status": sync.status,
+        "created_at": sync.created_at.isoformat() if sync.created_at else None,
+        "completed_at": sync.completed_at.isoformat() if sync.completed_at else None,
+        "total_contacts": sync.total_contacts,
+        "total_companies": sync.total_companies,
+        "total_deals": sync.total_deals
+    }
+
 class HubspotSyncService:
     """Service pour synchroniser les données HubSpot avec la base de données locale"""
     
@@ -239,3 +255,96 @@ class HubspotSyncService:
             .filter(HubspotDataSync.user_id == user_id, HubspotDataSync.status == "completed") \
             .order_by(HubspotDataSync.completed_at.desc()) \
             .first()
+
+
+    # === NOUVELLES MÉTHODES SMART SYNC ===
+    
+    @staticmethod
+    async def should_sync_data(db: Session, user_id: int) -> tuple[bool, str, Optional[float]]:
+        """
+        Détermine si une synchronisation est nécessaire basée sur la stratégie Smart Sync
+        
+        Returns:
+            tuple: (should_sync: bool, reason: str, hours_since_last: Optional[float])
+        """
+        from datetime import datetime, timezone
+        
+        # Récupérer la dernière sync
+        latest_sync = await HubspotSyncService.get_latest_sync(db, user_id)
+        
+        if not latest_sync:
+            return True, "no_previous_sync", None
+        
+        # Calculer le temps écoulé depuis la dernière sync
+        now = datetime.now(timezone.utc)
+        last_sync_time = latest_sync.completed_at
+        
+        if not last_sync_time:
+            return True, "incomplete_sync", None
+            
+        # Assurer que last_sync_time a un timezone
+        if last_sync_time.tzinfo is None:
+            last_sync_time = last_sync_time.replace(tzinfo=timezone.utc)
+        
+        time_diff = now - last_sync_time
+        hours_since = time_diff.total_seconds() / 3600
+        
+        # STRATÉGIE SMART SYNC
+        if hours_since >= 24:
+            return True, "sync_very_old_24h", hours_since
+        elif hours_since >= 6:
+            return True, "sync_stale_6h", hours_since
+        elif hours_since >= 1 and latest_sync.status != "completed":
+            return True, "previous_sync_failed", hours_since
+        else:
+            return False, "data_fresh", hours_since
+    
+    @staticmethod
+    async def get_sync_status(db: Session, user_id: int) -> dict:
+        """
+        Retourne un statut enrichi de synchronisation pour l'interface
+        """
+        should_sync, reason, hours_since = await HubspotSyncService.should_sync_data(db, user_id)
+        latest_sync = await HubspotSyncService.get_latest_sync(db, user_id)
+        
+        # Déterminer la fraîcheur des données
+        if not latest_sync:
+            data_freshness = "never"
+            recommendation = "Première synchronisation requise"
+        elif hours_since is None:
+            data_freshness = "unknown"
+            recommendation = "Synchronisation recommandée"
+        elif hours_since >= 24:
+            data_freshness = "very_stale"
+            recommendation = "Synchronisation urgente recommandée"
+        elif hours_since >= 6:
+            data_freshness = "stale"
+            recommendation = "Synchronisation recommandée"
+        elif hours_since >= 1:
+            data_freshness = "acceptable"
+            recommendation = "Données acceptables"
+        else:
+            data_freshness = "fresh"
+            recommendation = "Données fraîches"
+        
+        return {
+            "needs_sync": should_sync,
+            "reason": reason,
+            "last_sync": sync_to_dict(latest_sync),
+            "data_freshness": data_freshness,
+            "hours_since_sync": hours_since,
+            "recommendation": recommendation
+        }
+    
+    @staticmethod
+    async def should_sync_on_login(db: Session, user_id: int) -> bool:
+        """
+        Détermine si une sync doit être déclenchée au login (seuil 6h)
+        """
+        should_sync, reason, hours_since = await HubspotSyncService.should_sync_data(db, user_id)
+        
+        # Sync au login seulement si > 6h ou jamais sync
+        if reason in ["no_previous_sync", "sync_very_old_24h", "sync_stale_6h"]:
+            return True
+        
+        return False
