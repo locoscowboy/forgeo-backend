@@ -1,8 +1,9 @@
 from typing import Any
 import requests
+import logging
 from fastapi.responses import RedirectResponse, HTMLResponse
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_active_user
@@ -10,8 +11,10 @@ from app.crud import hubspot as crud_hubspot
 from app.models.user import User
 from app.core.config import settings
 from app.schemas.hubspot import HubspotTokenCreate, HubspotToken, HubspotAuthResponse
+from app.services.airbyte_service import AirbyteService  # ✅ AJOUT
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/auth", response_model=HubspotAuthResponse)
 def hubspot_auth(
@@ -36,10 +39,26 @@ def hubspot_auth(
 
     return {"auth_url": auth_url}
 
+# ✅ AJOUT : Fonction pour configurer Airbyte en arrière-plan
+async def setup_airbyte_connection(db: Session, user_id: int, refresh_token: str):
+    """Configure Airbyte en arrière-plan après OAuth"""
+    try:
+        logger.info(f"Starting Airbyte setup for user {user_id}...")
+        airbyte_service = AirbyteService(db, user_id)
+        airbyte_conn = await airbyte_service.setup_user_connection(refresh_token)
+        
+        if airbyte_conn:
+            logger.info(f"✅ Airbyte setup completed for user {user_id}")
+        else:
+            logger.error(f"❌ Airbyte setup failed for user {user_id}")
+    except Exception as e:
+        logger.error(f"❌ Error setting up Airbyte for user {user_id}: {e}")
+
 @router.get("/callback")
-def hubspot_callback(
+async def hubspot_callback(
     code: str,
     state: str,
+    background_tasks: BackgroundTasks,  # ✅ AJOUT
     db: Session = Depends(get_db),
 ) -> Any:
     """
@@ -53,7 +72,7 @@ def hubspot_callback(
             status_code=400,
             detail="Invalid state parameter"
         )
-    
+
     # Vérifier que l'utilisateur existe
     from app import crud
     user = crud.user.get(db, user_id)
@@ -91,13 +110,22 @@ def hubspot_callback(
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     token_obj = HubspotTokenCreate(
-        access_token=token_data["access_token"],
+        access_token=token_data["refresh_token"],
         refresh_token=token_data["refresh_token"],
         expires_at=expires_at,
         is_active=True
     )
 
     crud_hubspot.create_token(db, token_obj, user_id)
+
+    # ✅ AJOUT : Configurer Airbyte en arrière-plan
+    background_tasks.add_task(
+        setup_airbyte_connection,
+        db,
+        user_id,
+        token_data["refresh_token"]
+    )
+    logger.info(f"Airbyte setup scheduled for user {user_id}")
 
     return HTMLResponse(content="""
 <!DOCTYPE html>
@@ -117,7 +145,7 @@ def hubspot_callback(
             window.location.href = 'https://app.forgeo.io/audits?connected=true';
         }
     </script>
-    <p>Connexion réussie ! Cette fenêtre va se fermer automatiquement...</p>
+    <p>Connexion réussie ! Configuration Airbyte en cours...</p>
 </body>
 </html>
 """)
@@ -168,7 +196,7 @@ def get_hubspot_token(
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
         token_update = HubspotTokenCreate(
-            access_token=token_data["access_token"],
+            access_token=token_data["refresh_token"],
             refresh_token=token_data["refresh_token"],
             expires_at=expires_at,
             is_active=True

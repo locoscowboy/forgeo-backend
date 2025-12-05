@@ -32,8 +32,6 @@ class Audit(Base):
     detail_items = relationship("AuditDetailItem", back_populates="audit", cascade="all, delete-orphan")
 
     # Relation avec la synchronisation HubSpot
-    data_sync_id = Column(Integer, ForeignKey("hubspot_data_sync.id"), nullable=True)
-    data_sync = relationship("HubspotDataSync", back_populates="audits")
 
 class AuditResult(Base):
     __tablename__ = "audit_results"

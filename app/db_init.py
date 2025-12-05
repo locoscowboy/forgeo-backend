@@ -15,7 +15,7 @@ def init_db():
     from app.models import user
     from app.models import audit
     from app.models import hubspot
-    from app.models import hubspot_data
-    
+    from app.models import airbyte  # ✅ AJOUT
+
     # Create tables if they don't exist
     Base.metadata.create_all(bind=engine)

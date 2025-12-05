@@ -51,3 +51,16 @@ htmlcov/
 # Alembic
 alembic/versions/*
 !alembic/versions/.gitkeep 
+# Backups
+*.backup
+*.backup_*
+backup*.sql
+backups/
+*.bak
+*.old
+
+# Environment backups
+.env.backup*
+
+# Docker compose backups
+docker-compose.yml.backup*

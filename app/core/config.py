@@ -33,15 +33,21 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: Optional[str], info: Dict[str, Any]) -> Any:
         if isinstance(v, str):
             return v
-        
+
         # Construction manuelle de l'URL PostgreSQL
         user = info.data.get("POSTGRES_USER", "")
         password = info.data.get("POSTGRES_PASSWORD", "")
         host = info.data.get("POSTGRES_SERVER", "")
         db = info.data.get("POSTGRES_DB", "")
-        
+
         # Syntaxe compatible Pydantic v2
         return f"postgresql://{user}:{password}@{host}/{db}"
+
+    # ✅ AJOUT : Propriété pour récupérer DATABASE_URL
+    @property
+    def DATABASE_URL(self) -> str:
+        """Retourne l'URL de la base de données"""
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
 
     # HubSpot settings
     HUBSPOT_CLIENT_ID: Optional[str] = os.getenv("HUBSPOT_CLIENT_ID")

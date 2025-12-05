@@ -1,37 +1,13 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, hubspot, audits, hubspot_sync, contacts, companies, deals
+from app.api.v1.endpoints import auth
+from app.api.v1.endpoints import users
+from app.api.v1.endpoints import hubspot
+from app.api.v1.endpoints import airbyte  # ✅ AJOUT Phase 3
 
 api_router = APIRouter()
-api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
+
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(hubspot.router, prefix="/hubspot", tags=["hubspot"])
-api_router.include_router(audits.router, prefix="/audits", tags=["audits"])
-
-# Ajouter la route pour la synchronisation
-api_router.include_router(
-    hubspot_sync.router,
-    prefix="/hubspot-sync",
-    tags=["hubspot-sync"]
-)
-
-# Routes des contacts
-api_router.include_router(
-    contacts.router,
-    prefix="/contacts",
-    tags=["contacts"]
-)
-
-# Routes des companies
-api_router.include_router(
-    companies.router,
-    prefix="/companies",
-    tags=["companies"]
-)
-
-# Routes des deals  ← AJOUTER CETTE SECTION
-api_router.include_router(
-    deals.router,
-    prefix="/deals",
-    tags=["deals"]
-)
+api_router.include_router(airbyte.router, prefix="/airbyte", tags=["airbyte"])  # ✅ AJOUT Phase 3

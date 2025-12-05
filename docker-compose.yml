@@ -19,7 +19,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=forgeo
-      - POSTGRES_PASSWORD=forgeo
+      - POSTGRES_PASSWORD=enTyPuMCBKGh9dU7eSavsY2d3EN00keh
       - POSTGRES_DB=forgeo
 
   nginx:
@@ -36,5 +36,20 @@ services:
     depends_on:
       - api
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: forgeo_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.dev
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
+  pgadmin_data:
