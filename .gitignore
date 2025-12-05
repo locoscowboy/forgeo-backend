@@ -64,3 +64,32 @@ backups/
 
 # Docker compose backups
 docker-compose.yml.backup*
+
+# Tokens et fichiers sensibles
+token.json
+*.token
+*_response.json
+auth_response.json
+audit_response.json
+sync_response.json
+
+# Fichiers de debug/script temporaires
+add_*.py
+fix_*.py
+create_admin*.py
+create_audit*.py
+crud_*_updated.py
+crud_init*.py
+inspect_*.py
+generate_*.py
+update_*.py
+updated_*.py
+audit.py
+user.py
+api.py
+api_with_audits.py
+models_init.py
+
+# Fichiers texte temporaires
+db_columns.txt
+service_columns.txt
